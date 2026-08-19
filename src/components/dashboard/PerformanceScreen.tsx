@@ -1,0 +1,152 @@
+"use client";
+
+import Icon from "@/components/ui/Icon";
+import BottomNav from "@/components/layout/BottomNav";
+import ScreenHeader from "@/components/layout/ScreenHeader";
+import { useSession } from "@/components/layout/SessionProvider";
+import { bandFor, formatDuration } from "@/lib/format";
+
+/** Personal performance. Ported 1:1 from index.html `PerformanceScreen`. */
+export function PerformanceScreen() {
+  const { attemptHistory } = useSession();
+
+  const hasData = attemptHistory.length > 0;
+  const totalCorrect = attemptHistory.reduce((a, x) => a + x.score, 0);
+  const totalQuestions = attemptHistory.reduce((a, x) => a + x.total, 0);
+  const overallAccuracy = totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0;
+  const masteredCount = attemptHistory.filter((x) => x.pct >= 70).length;
+  const overallMastery = hasData ? Math.round((masteredCount / attemptHistory.length) * 100) : 0;
+  const totalStudyMs = attemptHistory.reduce((a, x) => a + (x.durationMs || 0), 0);
+
+  const bySubject: Record<
+    string,
+    { name: string; totalScore: number; totalMax: number; count: number }
+  > = {};
+  attemptHistory.forEach((a) => {
+    const key = a.subjectName || "Other";
+    if (!bySubject[key]) {
+      bySubject[key] = { name: key, totalScore: 0, totalMax: 0, count: 0 };
+    }
+    bySubject[key].totalScore += a.score;
+    bySubject[key].totalMax += a.total;
+    bySubject[key].count += 1;
+  });
+
+  const subjectRows = Object.values(bySubject)
+    .map((s) => ({
+      ...s,
+      pct: s.totalMax > 0 ? Math.round((s.totalScore / s.totalMax) * 100) : 0,
+    }))
+    .sort((a, b) => a.pct - b.pct);
+
+  const recent = attemptHistory.slice(-8).reverse();
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+      <ScreenHeader title="Performance" />
+
+      {!hasData && (
+        <div className="results-wrap">
+          <div className="score-circle">
+            <Icon name="chart" size={22} />
+          </div>
+          <p className="results-line1">No performance data yet</p>
+          <p className="results-line2">
+            Take a test or past paper and your results will show up here.
+          </p>
+        </div>
+      )}
+
+      {hasData && (
+        <div style={{ padding: "4px 16px 16px", flex: 1, overflowY: "auto" }}>
+          <p className="section-title" style={{ margin: "8px 0" }}>
+            Performance Overview
+          </p>
+          <div className="perf-stats-row">
+            <div className="perf-stat-card">
+              <div className="perf-stat-circle perf-stat-circle-mastery">{overallMastery}%</div>
+              <p className="perf-stat-label">Overall mastery</p>
+            </div>
+            <div className="perf-stat-card">
+              <div className="perf-stat-circle perf-stat-circle-accuracy">{overallAccuracy}%</div>
+              <p className="perf-stat-label">Accuracy rate</p>
+            </div>
+            <div className="perf-stat-card">
+              <div className="perf-stat-circle perf-stat-circle-time">
+                {formatDuration(totalStudyMs)}
+              </div>
+              <p className="perf-stat-label">Study time</p>
+            </div>
+          </div>
+
+          <p className="perf-note">
+            Based on {attemptHistory.length} attempt
+            {attemptHistory.length === 1 ? "" : "s"} this session. This resets when you close or
+            reload the app, since results aren&apos;t saved to an account yet.
+          </p>
+
+          <p className="section-title" style={{ margin: "16px 0 8px" }}>
+            Recent attempts
+          </p>
+          <div className="perf-trend">
+            {recent.map((a) => {
+              const band = bandFor(a.pct);
+              return (
+                <div key={a.id} className="perf-trend-row">
+                  <div className="perf-trend-label">
+                    <p className="perf-trend-title">
+                      {a.subjectName} · {a.label}
+                    </p>
+                    <p className="perf-trend-sub">
+                      {a.score}/{a.total} · {formatDuration(a.durationMs)}
+                    </p>
+                  </div>
+                  <div className="perf-trend-bar-track">
+                    <div
+                      className={"perf-trend-bar-fill " + band.cls}
+                      style={{ width: a.pct + "%" }}
+                    />
+                  </div>
+                  <span className="perf-trend-pct">{a.pct}%</span>
+                </div>
+              );
+            })}
+          </div>
+
+          <p className="section-title" style={{ margin: "20px 0 4px" }}>
+            Subject Breakdown
+          </p>
+          <p className="perf-note" style={{ margin: "0 0 10px" }}>
+            Sorted from most to least practice needed.
+          </p>
+          <div className="perf-subject-list">
+            {subjectRows.map((s) => {
+              const band = bandFor(s.pct);
+              return (
+                <div key={s.name} className="perf-subject-row">
+                  <div className="perf-subject-top">
+                    <p className="perf-subject-name">{s.name}</p>
+                    <span className={"perf-subject-badge " + band.cls}>{band.label}</span>
+                  </div>
+                  <div className="perf-trend-bar-track">
+                    <div
+                      className={"perf-trend-bar-fill " + band.cls}
+                      style={{ width: s.pct + "%" }}
+                    />
+                  </div>
+                  <p className="perf-subject-meta">
+                    {s.pct}% average · {s.count} attempt{s.count === 1 ? "" : "s"}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <BottomNav active="progress" />
+    </div>
+  );
+}
+
+export default PerformanceScreen;
